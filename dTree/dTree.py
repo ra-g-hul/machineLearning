@@ -14,24 +14,25 @@ https://en.wikipedia.org/wiki/Entropy_(information_theory)
 import math
 import sys
 
-def get_sets(a_file): # Read datasets from a file and store them as a list of tuples
+def get_sets(a_file): # Read datasets from a file and store them as a list of tuples.
     attributes = []
     features = ()
     first = 0
     try:
-        for line in open(a_file, "r"):
-            line = line.split()
-            if first == 0: # First line contains features.
-                first += 1
-                features = tuple(line)
-            else:
-                attributes.append(map(int, tuple(line)))
+        with open(a_file, "r") as f: # File closes automatically once done.
+            for line in f:
+                line = line.split()
+                if first == 0: # First line contains features.
+                    first += 1
+                    features = tuple(line)
+                else:
+                    attributes.append(map(int, tuple(line)))
         return features, attributes
     except(IOError):
         print "%s cannot be found." %(a_file)
         sys.exit()
    
-def find_counts(attributes, attributes_len): # Return the number of occurrences of each class
+def find_counts(attributes, attributes_len): # Return the number of occurrences of each class.
     all_classes = []
     for i in range(attributes_len):
         all_classes.append(attributes[i][-1])
@@ -150,7 +151,7 @@ def pprint(d, indent, meta): # Pretty print a dictionary, removing 'meta' data.
                 print '| ' * (indent+1) + str(value)
     return
 
-def find_class(set, d): # Find the class of an attribute set from a decison tree.
+def find_class(set, d): # Find the class of an attribute set from a decision tree.
     if type(d) is dict:
         for key, value in d.iteritems():
             index = features.index(key)
@@ -165,11 +166,12 @@ def compute_accuracy(file, decision_tree): # Finds the accuracy of the decision 
     sets = get_sets(file)[1] # We just need the attributes.
     sets_len = len(sets)
     match = 0
+    classes = []
     for i in range(sets_len):
-        group = find_class(sets[i], decision_tree)
-        if sets[i][-1] == group:
+        classes.append(find_class(sets[i], decision_tree))
+        if sets[i][-1] == classes[-1]:
             match += 1
-    return (round((float(match) / sets_len) * 100, 4))
+    return (round((float(match) / sets_len) * 100, 4)), classes
 
 def find_accuracy(train, test, flag = 0):
     global features, features_len, init_max
@@ -187,17 +189,38 @@ def find_accuracy(train, test, flag = 0):
     create_decision_tree(decision_tree, parent_nodes, attributes)
     if flag == 1:
         pprint(decision_tree, 0, "max_classes")
-    train_acc = compute_accuracy(train, decision_tree)
-    test_acc = compute_accuracy(test, decision_tree)
-    return train_acc, test_acc
-     
+    train_acc = compute_accuracy(train, decision_tree)[0]
+    test_acc, classes = compute_accuracy(test, decision_tree)
+    return train_acc, test_acc, classes
+
+def find_classes_sets(feat, attributes, test_sets): # Used in the bagging example.
+    global features, features_len, init_max
+    parent_nodes = []
+    decision_tree = {}
+    features = feat
+    features_len = len(features)
+    ideal_len = features_len + 1
+    attributes[:] = [attr for attr in attributes if len(attr) == ideal_len] # Check if all attributes are the required length.
+    attributes_len = len(attributes)
+    if attributes_len == 0: # If the training file is empty, we return an empty decision tree.
+        return 0, 0     
+    class_counts = find_counts(attributes, attributes_len)
+    init_max = get_max(class_counts)
+    create_decision_tree(decision_tree, parent_nodes, attributes)
+    test_sets_len = len(test_sets)
+    classes = []
+    for i in range(test_sets_len):
+        classes.append(find_class(test_sets[i], decision_tree))
+    return classes
+
 if __name__ == "__main__":
     if len(sys.argv) == 4:
-        train_acc, test_acc = find_accuracy(sys.argv[1], sys.argv[2], sys.argv[3])[1:]
+        train_acc, test_acc, classes = find_accuracy(sys.argv[1], sys.argv[2], sys.argv[3])[1:]
     elif len(sys.argv) == 3:
-        train_acc, test_acc = find_accuracy(sys.argv[1], sys.argv[2])[1:]
+        train_acc, test_acc, classes = find_accuracy(sys.argv[1], sys.argv[2])[1:]
     else:
         print "Wrong number of arguments. Syntax: python dTree.py training_file testing_file optional_flag_to_print_decision_tree(0 or 1)."
         sys.exit()
     print "Accuracy on training data file = %s%%" %train_acc
     print "Accuracy on testing data file = %s%%" %test_acc
+    print classes
